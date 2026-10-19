@@ -740,122 +740,132 @@
     }
 
     /* ============================================================
-       7. 실시간 서점 API (Google Books 한국어 API 연동)
-       Fallback 다중 키워드 검색 엔진 적용
-     실시간 서점 검색 엔진 (안전망 강화 버전)
-   ============================================================ */
-async function fetchBooksFromApi(isCustom = false) {
-  const container = document.getElementById('bookListContainer');
-  const loading = document.getElementById('loadingBox');
-  container.innerHTML = "";
-  loading.classList.remove('hidden');
-
-  let query = "";
-  if (isCustom) {
-    query = document.getElementById('apiCustomQuery').value.trim();
-  }
-
-  if (!query) {
-    // 16가지 독서 MBTI 전용 키워드 매핑 테이블
-    const apiKeywords = {
-      "PRDO": "시간관리 습관 공부법",
-      "PRDM": "자기관리 메모 정리법",
-      "PRSO": "핵심 요약 실전 공부법",
-      "PRSM": "트렌드 지식 교양 상식",
-      "PFDO": "자아성찰 성장소설 에세이",
-      "PFDM": "감성에세이 힐링소설",
-      "PFSO": "청소년 성장소설 모험",
-      "PFSM": "관계 심리 공감 에세이",
-      "CRDO": "인류 역사 문명 과학",
-      "CRDM": "융합 교양 뇌과학 역사",
-      "CRSO": "알아두면 쓸모있는 과학 상식",
-      "CRSM": "잡학사전 세상의 모든 지식",
-      "CFDO": "하드SF 세계관 소설",
-      "CFDM": "철학 판타지 디스토피아",
-      "CFSO": "반전 추리 미스터리 스릴러",
-      "CFSM": "SF 단편집 환상문학"
-    };
-
-    query = apiKeywords[userResultType] || "청소년 베스트셀러";
-  }
-
-  let foundBooks = [];
-
-  try {
-    const cleanQuery = encodeURIComponent(query);
-    const url = `https://www.googleapis.com/books/v1/volumes?q=${cleanQuery}&maxResults=8`;
-    const res = await fetch(url);
-    if (res.ok) {
-      const data = await res.json();
-      if (data.items && data.items.length > 0) {
-        foundBooks = data.items.map(item => {
-          const info = item.volumeInfo || {};
-          let thumb = info.imageLinks ? (info.imageLinks.thumbnail || info.imageLinks.smallThumbnail) : "";
-          if (thumb && thumb.startsWith("http://")) thumb = thumb.replace("http://", "https://");
-          return {
-            title: info.title || "제목 미상",
-            author: info.authors ? info.authors.join(", ") : "저자 미상",
-            desc: info.description ? (info.description.substring(0, 110) + "...") : "도서 정보가 제공됩니다.",
-            tag: "실시간 검색",
-            thumb: thumb,
-            link: info.infoLink || `https://search.shopping.naver.com/book/search?query=${encodeURIComponent(info.title || query)}`
-          };
-        });
+       7. 실시간 서점 검색 엔진 (키워드 분해 및 성향별 동적 폴백 적용)
+       ============================================================ */
+    async function fetchBooksFromApi(isCustom = false) {
+      const container = document.getElementById('bookListContainer');
+      const loading = document.getElementById('loadingBox');
+      container.innerHTML = "";
+      loading.classList.remove('hidden');
+    
+      let query = "";
+      if (isCustom) {
+        query = document.getElementById('apiCustomQuery').value.trim();
       }
-    }
-  } catch (e) {
-    console.warn("Google Books API 호출 실패, 도서관 DB로 대체합니다.", e);
-  }
-
-  // API 검색 실패 또는 0건일 때 자동 폴백
-  if (foundBooks.length === 0) {
-    const pool = customBooks || defaultBooks;
-    const matched = pool.filter(b => 
-      b.title.includes(query) || 
-      b.desc.includes(query) || 
-      b.tag.includes(query) || 
-      b.author.includes(query)
-    );
-
-    const fallbackList = matched.length > 0 ? matched : pool.slice(0, 5);
-    foundBooks = fallbackList.map(b => ({
-      title: b.title,
-      author: b.author,
-      desc: b.desc,
-      tag: b.tag,
-      thumb: "",
-      link: `https://search.shopping.naver.com/book/search?query=${encodeURIComponent(b.title)}`
-    }));
-  }
-
-  loading.classList.add('hidden');
-
-  const topBooks = foundBooks.slice(0, 5);
-  topBooks.forEach((book, idx) => {
-    const card = document.createElement('div');
-    card.className = "p-4 sm:p-5 rounded-2xl border border-[#ECE5DA] hover:border-indigo-200 bg-[#F5F0E8]/60 hover:bg-white transition flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between";
-    card.innerHTML = `
-      <div class="flex items-start gap-3.5 flex-1">
-        <span class="w-7 h-7 rounded-xl bg-[#8C6D53] text-white flex items-center justify-center font-bold text-xs shrink-0 mt-0.5">${idx + 1}</span>
-        ${book.thumb ? `<img src="${book.thumb}" alt="${book.title}" class="w-12 h-16 object-cover rounded-md shadow-xs shrink-0 hidden sm:block">` : ''}
-        <div>
-          <div class="flex items-center gap-2 flex-wrap mb-1">
-            <h4 class="font-bold text-slate-900 text-base sm:text-lg">${book.title}</h4>
-            <span class="text-xs px-2 py-0.5 bg-emerald-50 text-emerald-700 rounded-md font-medium">${book.tag}</span>
+    
+      // 16가지 독서 MBTI 전용 키워드 매핑 테이블
+      const apiKeywords = {
+        "PRDO": "습관 공부법",
+        "PRDM": "자기관리 메모",
+        "PRSO": "요약 공부법",
+        "PRSM": "상식 교양",
+        "PFDO": "성장소설 자아성찰",
+        "PFDM": "힐링소설 에세이",
+        "PFSO": "청소년소설 모험",
+        "PFSM": "관계 심리",
+        "CRDO": "역사 문명 과학",
+        "CRDM": "뇌과학 인문학",
+        "CRSO": "과학 상식",
+        "CRSM": "잡학사전 과학",
+        "CFDO": "SF소설 세계관",
+        "CFDM": "판타지 디스토피아",
+        "CFSO": "추리 미스터리",
+        "CFSM": "SF단편 환상문학"
+      };
+    
+      if (!query) {
+        query = apiKeywords[userResultType] || "베스트셀러";
+      }
+    
+      let foundBooks = [];
+    
+      // 1차 시도: Google Books API (단일 핵심 키워드로 검색해 적중률 향상)
+      try {
+        const primaryTerm = query.split(" ")[0]; // 가장 핵심인 첫 단어 추출
+        const cleanQuery = encodeURIComponent(primaryTerm);
+        const url = `https://www.googleapis.com/books/v1/volumes?q=${cleanQuery}&maxResults=8`;
+        const res = await fetch(url);
+        if (res.ok) {
+          const data = await res.json();
+          if (data.items && data.items.length > 0) {
+            foundBooks = data.items.map(item => {
+              const info = item.volumeInfo || {};
+              let thumb = info.imageLinks ? (info.imageLinks.thumbnail || info.imageLinks.smallThumbnail) : "";
+              if (thumb && thumb.startsWith("http://")) thumb = thumb.replace("http://", "https://");
+              return {
+                title: info.title || "제목 미상",
+                author: info.authors ? info.authors.join(", ") : "저자 미상",
+                desc: info.description ? (info.description.substring(0, 110) + "...") : "실시간 도서 정보가 제공됩니다.",
+                tag: "실시간 검색",
+                thumb: thumb,
+                link: info.infoLink || `https://search.shopping.naver.com/book/search?query=${encodeURIComponent(info.title || query)}`
+              };
+            });
+          }
+        }
+      } catch (e) {
+        console.warn("Google Books API 호출 실패, 지능형 폴백을 실행합니다.", e);
+      }
+    
+      // 2차 안전망: API 실패 시 단어별 분해 검색 및 코사인 유사도 기반 동적 매칭
+      if (foundBooks.length === 0) {
+        const pool = customBooks || defaultBooks;
+        const tokens = query.split(" ").filter(t => t.length > 0);
+    
+        // 검색어에 포함된 단어가 들어있는 책 필터링
+        let matched = pool.filter(b => 
+          tokens.some(t => b.title.includes(t) || b.desc.includes(t) || b.tag.includes(t))
+        );
+    
+        // 단어 일치 도서가 없으면, 현재 사용자의 MBTI 벡터와 가장 잘 맞는 도서 상위 5권 산출
+        if (matched.length === 0) {
+          const scored = pool.map(book => ({
+            ...book,
+            sim: cosineSimilarity(userVector, book.v)
+          }));
+          scored.sort((a, b) => b.sim - a.sim);
+          matched = scored.slice(0, 5);
+        }
+    
+        foundBooks = matched.slice(0, 5).map(b => ({
+          title: b.title,
+          author: b.author,
+          desc: b.desc,
+          tag: b.tag,
+          thumb: "",
+          link: `https://search.shopping.naver.com/book/search?query=${encodeURIComponent(b.title)}`
+        }));
+      }
+    
+      loading.classList.add('hidden');
+    
+      // 화면 렌더링
+      const topBooks = foundBooks.slice(0, 5);
+      topBooks.forEach((book, idx) => {
+        const card = document.createElement('div');
+        card.className = "p-4 sm:p-5 rounded-2xl border border-[#ECE5DA] hover:border-indigo-200 bg-[#F5F0E8]/60 hover:bg-white transition flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between";
+        card.innerHTML = `
+          <div class="flex items-start gap-3.5 flex-1">
+            <span class="w-7 h-7 rounded-xl bg-[#8C6D53] text-white flex items-center justify-center font-bold text-xs shrink-0 mt-0.5">${idx + 1}</span>
+            ${book.thumb ? `<img src="${book.thumb}" alt="${book.title}" class="w-12 h-16 object-cover rounded-md shadow-xs shrink-0 hidden sm:block">` : ''}
+            <div>
+              <div class="flex items-center gap-2 flex-wrap mb-1">
+                <h4 class="font-bold text-slate-900 text-base sm:text-lg">${book.title}</h4>
+                <span class="text-xs px-2 py-0.5 bg-emerald-50 text-emerald-700 rounded-md font-medium">${book.tag}</span>
+              </div>
+              <p class="text-xs text-slate-500 font-medium mb-1.5">${book.author}</p>
+              <p class="text-xs sm:text-sm text-stone-600 leading-relaxed">${book.desc}</p>
+            </div>
           </div>
-          <p class="text-xs text-slate-500 font-medium mb-1.5">${book.author}</p>
-          <p class="text-xs sm:text-sm text-stone-600 leading-relaxed">${book.desc}</p>
-        </div>
-      </div>
-      <div class="flex sm:flex-col items-center sm:items-end justify-between w-full sm:w-auto shrink-0 border-t sm:border-t-0 pt-2 sm:pt-0 border-[#E0D7C9]">
-        <a href="${book.link}" target="_blank" class="text-xs px-3 py-1.5 bg-[#8C6D53] hover:bg-[#755841] text-white rounded-xl font-medium transition shadow-xs">
-          책 상세보기 ↗
-        </a>
-      </div>
-    `;
-    container.appendChild(card);
-  });
-}
+          <div class="flex sm:flex-col items-center sm:items-end justify-between w-full sm:w-auto shrink-0 border-t sm:border-t-0 pt-2 sm:pt-0 border-[#E0D7C9]">
+            <a href="${book.link}" target="_blank" class="text-xs px-3 py-1.5 bg-[#8C6D53] hover:bg-[#755841] text-white rounded-xl font-medium transition shadow-xs">
+              책 상세보기 ↗
+            </a>
+          </div>
+        `;
+        container.appendChild(card);
+      });
+    }
 
     /* ============================================================
        8. 모달 및 CSV 관리 기능
