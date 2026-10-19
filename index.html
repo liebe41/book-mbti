@@ -229,12 +229,12 @@
               id="apiCustomQuery" 
               placeholder="추가로 검색하고 싶은 키워드 (예: 추리, 우주, 심리학)" 
               class="flex-1 px-4 py-2 border border-[#E0D7C9] rounded-xl text-sm focus:outline-none focus:border-[#8C6D53] bg-white text-stone-800"
-              onkeydown="if(event.key === 'Enter') { event.preventDefault(); fetchBooksFromApi(true); }"
+              onkeydown="if(event.key === 'Enter') { event.preventDefault(); runManualSearch(); }"
             >
             <button 
               type="button"
-              onclick="fetchBooksFromApi(true)" 
-              class="px-5 py-2 bg-[#8C6D53] hover:bg-[#755841] active:scale-95 text-white rounded-xl text-sm font-semibold transition cursor-pointer shrink-0 shadow-xs"
+              onclick="runManualSearch()" 
+              class="px-5 py-2 bg-[#8C6D53] hover:bg-[#755841] active:scale-95 text-white rounded-xl text-sm font-semibold transition cursor-pointer shrink-0 shadow-sm"
             >
               검색 🔍
             </button>
@@ -776,51 +776,58 @@
        7. 100% 순수 실시간 Google Books API 검색 엔진 (공식 API Key 적용)
        ============================================================ */
     
-    // 사용자 발급 정식 API Key 연동
     const GOOGLE_BOOKS_API_KEY = "AIzaSyDZL8aiXOhV_opwk4d3768zCwGca5FbYzA"; 
-    
-    async function fetchBooksFromApi(isCustom = false) {
+
+    // 검색 버튼 및 엔터키 전용 실행 함수
+    function runManualSearch() {
+      const inputEl = document.getElementById('apiCustomQuery');
+      const val = inputEl ? inputEl.value.trim() : "";
+      if (!val) {
+        alert("검색어를 입력해 주세요! (예: 추리, 우주, 심리학)");
+        if (inputEl) inputEl.focus();
+        return;
+      }
+      fetchBooksFromApi(val);
+    }
+
+    async function fetchBooksFromApi(customQueryStr = "") {
       const container = document.getElementById('bookListContainer');
       const loading = document.getElementById('loadingBox');
       const inputEl = document.getElementById('apiCustomQuery');
-    
+
+      // 16가지 독서 MBTI별 실시간 구글 도서 검색어 매핑
+      const queryMap = {
+        "PRDO": "습관 공부법",
+        "PRDM": "자기관리 메모",
+        "PRSO": "핵심 공부법",
+        "PRSM": "트렌드 상식 교양",
+        "PFDO": "자아성찰 성장소설",
+        "PFDM": "감성 힐링 에세이",
+        "PFSO": "청소년 소설 모험",
+        "PFSM": "관계 심리학",
+        "CRDO": "역사 문명 사피엔스",
+        "CRDM": "뇌과학 인문학",
+        "CRSO": "교양 과학 상식",
+        "CRSM": "잡학사전 과학",
+        "CFDO": "SF 소설 세계관",
+        "CFDM": "디스토피아 소설",
+        "CFSO": "추리 소설 미스터리",
+        "CFSM": "SF 단편 소설"
+      };
+
+      // 입력된 검색어가 있으면 사용, 없으면 내 MBTI 기본 키워드 사용
       let searchTerm = "";
-    
-      if (isCustom) {
-        const rawVal = inputEl ? inputEl.value.trim() : "";
-        if (!rawVal) {
-          alert("검색어를 입력해 주세요! (예: 추리, SF, 심리학)");
-          if (inputEl) inputEl.focus();
-          return;
-        }
-        searchTerm = rawVal;
+      if (typeof customQueryStr === 'string' && customQueryStr.trim() !== "") {
+        searchTerm = customQueryStr.trim();
+      } else if (inputEl && inputEl.value.trim() !== "") {
+        searchTerm = inputEl.value.trim();
       } else {
-        // 기본 MBTI 맞춤 검색어
-        const queryMap = {
-          "PRDO": "습관 공부법",
-          "PRDM": "자기관리 메모",
-          "PRSO": "핵심 공부법",
-          "PRSM": "트렌드 상식 교양",
-          "PFDO": "자아성찰 성장소설",
-          "PFDM": "감성 힐링 에세이",
-          "PFSO": "청소년 소설 모험",
-          "PFSM": "관계 심리학",
-          "CRDO": "역사 문명 사피엔스",
-          "CRDM": "뇌과학 인문학",
-          "CRSO": "교양 과학 상식",
-          "CRSM": "잡학사전 과학",
-          "CFDO": "SF 소설 세계관",
-          "CFDM": "디스토피아 소설",
-          "CFSO": "추리 소설 미스터리",
-          "CFSM": "SF 단편 소설"
-        };
         searchTerm = queryMap[userResultType] || "베스트셀러";
-        if (inputEl) inputEl.value = ""; // 자동 전환 시 이전 검색어 정리
       }
-    
+
       container.innerHTML = "";
       loading.classList.remove('hidden');
-    
+
       try {
         const cleanQuery = encodeURIComponent(searchTerm);
         const url = `https://www.googleapis.com/books/v1/volumes?q=${cleanQuery}&maxResults=15&printType=books&orderBy=relevance&key=${GOOGLE_BOOKS_API_KEY}`;
@@ -829,30 +836,30 @@
         if (!res.ok) {
           throw new Error(`Google API 응답 에러 (Status: ${res.status})`);
         }
-    
+
         const data = await res.json();
         loading.classList.add('hidden');
-    
+
         if (!data.items || data.items.length === 0) {
           container.innerHTML = `
             <div class="p-8 text-center bg-[#F5F0E8] rounded-2xl border border-[#ECE5DA]">
               <p class="text-sm font-bold text-stone-700 mb-1">검색 결과가 없습니다.</p>
               <p class="text-xs text-stone-500 mb-3">'${searchTerm}'에 해당하는 도서를 찾지 못했습니다. 다른 단어로 검색해 보세요.</p>
-              <button onclick="fetchBooksFromApi(false)" class="px-4 py-2 bg-[#8C6D53] hover:bg-[#755841] text-white rounded-xl text-xs font-semibold transition">
+              <button onclick="if(document.getElementById('apiCustomQuery')) document.getElementById('apiCustomQuery').value=''; fetchBooksFromApi('');" class="px-4 py-2 bg-[#8C6D53] hover:bg-[#755841] text-white rounded-xl text-xs font-semibold transition">
                 내 MBTI 추천 도서로 돌아가기
               </button>
             </div>
           `;
           return;
         }
-    
+
         const validBooks = [];
         data.items.forEach(item => {
           const info = item.volumeInfo || {};
           if (info.title && info.authors && info.authors.length > 0) {
             let thumb = info.imageLinks ? (info.imageLinks.thumbnail || info.imageLinks.smallThumbnail) : "";
             if (thumb && thumb.startsWith("http://")) thumb = thumb.replace("http://", "https://");
-    
+
             if (!validBooks.some(b => b.title === info.title)) {
               validBooks.push({
                 title: info.title,
@@ -866,7 +873,7 @@
             }
           }
         });
-    
+
         const top5 = validBooks.slice(0, 5);
         top5.forEach((book, idx) => {
           const card = document.createElement('div');
@@ -895,7 +902,7 @@
           `;
           container.appendChild(card);
         });
-    
+
       } catch (err) {
         console.error("실시간 도서 API 오류:", err);
         loading.classList.add('hidden');
@@ -903,7 +910,7 @@
           <div class="p-8 text-center bg-[#F5F0E8] rounded-2xl border border-[#ECE5DA]">
             <p class="text-sm font-bold text-stone-700 mb-1">실시간 도서 정보를 불러오는 중 오류가 발생했습니다.</p>
             <p class="text-xs text-stone-500 mb-3">${err.message || '네트워크 상태를 확인해 주세요.'}</p>
-            <button onclick="fetchBooksFromApi(true)" class="px-4 py-2 bg-[#8C6D53] hover:bg-[#755841] text-white rounded-xl text-xs font-semibold transition">
+            <button onclick="runManualSearch()" class="px-4 py-2 bg-[#8C6D53] hover:bg-[#755841] text-white rounded-xl text-xs font-semibold transition">
               다시 시도하기 ⟳
             </button>
           </div>
