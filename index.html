@@ -521,15 +521,16 @@
     let userResultType = "PRDO";
     let activeRecTab = 'curated';
 
-    /* ============================================================
-       4. 테스트 진행 로직
-       ============================================================ */
     function startQuiz() {
+      // 시작 시에도 한 번 더 확실하게 초기화
+      currentQuestionIdx = 0;
+      userAnswers = [];
+      userVector = [0.5, 0.5, 0.5, 0.5];
+    
       document.getElementById('introView').classList.add('hidden');
       document.getElementById('quizView').classList.remove('hidden');
       document.getElementById('resultView').classList.add('hidden');
-      currentQuestionIdx = 0;
-      userAnswers = [];
+      
       renderQuestion();
     }
 
@@ -570,7 +571,24 @@
       }
     }
 
+    /* ============================================================
+       수정: 테스트 다시 하기 및 시작 시 모든 상태 완벽 초기화
+       ============================================================ */
     function restartTest() {
+      // 1. 변수 초기화
+      currentQuestionIdx = 0;
+      userAnswers = [];
+      userVector = [0.5, 0.5, 0.5, 0.5];
+      userResultType = "PRDO";
+      activeRecTab = 'curated';
+    
+      // 2. 검색창 및 결과 UI 비우기
+      const searchInput = document.getElementById('apiCustomQuery');
+      if (searchInput) searchInput.value = "";
+      const container = document.getElementById('bookListContainer');
+      if (container) container.innerHTML = "";
+    
+      // 3. 화면 전환
       document.getElementById('resultView').classList.add('hidden');
       document.getElementById('quizView').classList.add('hidden');
       document.getElementById('introView').classList.remove('hidden');
