@@ -225,7 +225,7 @@
         <div id="apiSearchBox" class="hidden mb-5">
           <div class="flex gap-2">
             <input type="text" id="apiCustomQuery" placeholder="추가로 검색하고 싶은 키워드 (예: 과학, 추리, 심리)" class="flex-1 px-4 py-2 border border-[#E0D7C9] rounded-xl text-sm focus:outline-none focus:border-indigo-500">
-            <button onclick="fetchBooksFromApi(true)" class="px-4 py-2 bg-[#8C6D53] hover:bg-[#755841] text-white rounded-xl text-sm font-semibold transition">
+            <button onclick="(true)" class="px-4 py-2 bg-[#8C6D53] hover:bg-[#755841] text-white rounded-xl text-sm font-semibold transition">
               검색
             </button>
           </div>
@@ -763,7 +763,7 @@
     }
 
     /* ============================================================
-       수정 2: 무조건 5권 보장 + 성향별 검색어 최적화 서점 API 엔진
+       7. 100% 순수 실시간 서점 API 검색 엔진 (가짜 데이터 없음)
        ============================================================ */
     async function fetchBooksFromApi(isCustom = false) {
       const container = document.getElementById('bookListContainer');
@@ -771,112 +771,122 @@
       container.innerHTML = "";
       loading.classList.remove('hidden');
     
-      let query = "";
-      if (isCustom) {
-        query = document.getElementById('apiCustomQuery').value.trim();
-      }
+      let customKeyword = isCustom ? document.getElementById('apiCustomQuery').value.trim() : "";
     
-      // 16가지 독서 MBTI 전용 키워드 (도서 검색에 가장 잘 걸리는 알짜 단어)
-      const apiKeywords = {
-        "PRDO": "공부법 습관",
-        "PRDM": "자기관리 메모",
-        "PRSO": "핵심 공부법",
-        "PRSM": "상식 교양",
-        "PFDO": "성장소설",
-        "PFDM": "힐링 에세이",
-        "PFSO": "청소년 소설",
-        "PFSM": "관계 심리",
-        "CRDO": "사피엔스 역사",
-        "CRDM": "뇌과학 교양",
-        "CRSO": "과학 상식",
-        "CRSM": "잡학사전",
-        "CFDO": "SF 소설",
-        "CFDM": "디스토피아 소설",
-        "CFSO": "추리 소설",
-        "CFSM": "SF 단편소설"
+      // 16가지 독서 MBTI별 실시간 검색 키워드 체계 (1순위 정밀어 / 2순위 확장어)
+      const queryMap = {
+        "PRDO": { primary: "intitle:습관+intitle:공부", secondary: "자기계발" },
+        "PRDM": { primary: "intitle:메모+intitle:정리", secondary: "시간관리" },
+        "PRSO": { primary: "intitle:공부법", secondary: "학습법" },
+        "PRSM": { primary: "intitle:상식+intitle:교양", secondary: "지식" },
+    
+        "PFDO": { primary: "intitle:성장소설", secondary: "한국소설" },
+        "PFDM": { primary: "intitle:에세이", secondary: "문학에세이" },
+        "PFSO": { primary: "intitle:청소년소설", secondary: "소설" },
+        "PFSM": { primary: "intitle:관계+intitle:심리", secondary: "심리학" },
+    
+        "CRDO": { primary: "intitle:역사+intitle:문명", secondary: "세계사" },
+        "CRDM": { primary: "intitle:뇌과학", secondary: "인문교양" },
+        "CRSO": { primary: "intitle:과학상식", secondary: "교양과학" },
+        "CRSM": { primary: "intitle:잡학", secondary: "백과사전" },
+    
+        "CFDO": { primary: "subject:fiction+intitle:SF", secondary: "SF소설" },
+        "CFDM": { primary: "intitle:디스토피아", secondary: "환상문학" },
+        "CFSO": { primary: "intitle:추리소설", secondary: "미스터리소설" },
+        "CFSM": { primary: "intitle:단편소설", secondary: "SF단편" }
       };
     
-      if (!query) {
-        query = apiKeywords[userResultType] || "소설 베스트셀러";
-      }
+      const targetQuery = queryMap[userResultType] || { primary: "베스트셀러", secondary: "소설" };
     
-      let foundBooks = [];
-    
-      // 1차: Google Books API를 넉넉하게 20권 가져와 유효한 책만 선별
-      try {
-        const cleanQuery = encodeURIComponent(query);
-        const url = `https://www.googleapis.com/books/v1/volumes?q=${cleanQuery}&maxResults=20&orderBy=relevance`;
-        const res = await fetch(url);
-        if (res.ok) {
+      // 실제 구글 API 호출 헬퍼 함수
+      async function callGoogleBooks(q) {
+        try {
+          const url = `https://www.googleapis.com/books/v1/volumes?q=${encodeURIComponent(q)}&maxResults=15&printType=books`;
+          const res = await fetch(url);
+          if (!res.ok) return [];
           const data = await res.json();
-          if (data.items && data.items.length > 0) {
-            data.items.forEach(item => {
-              const info = item.volumeInfo || {};
-              // 제목과 저자가 제대로 있는 정식 도서만 수집
-              if (info.title && info.authors && info.description) {
-                let thumb = info.imageLinks ? (info.imageLinks.thumbnail || info.imageLinks.smallThumbnail) : "";
-                if (thumb && thumb.startsWith("http://")) thumb = thumb.replace("http://", "https://");
-                
-                // 중복 도서 제외하고 추가
-                if (!foundBooks.some(b => b.title === info.title)) {
-                  foundBooks.push({
-                    title: info.title,
-                    author: info.authors.join(", "),
-                    desc: info.description.substring(0, 110) + "...",
-                    tag: "실시간 검색",
-                    thumb: thumb,
-                    link: info.infoLink || `https://search.shopping.naver.com/book/search?query=${encodeURIComponent(info.title)}`
-                  });
-                }
-              }
-            });
-          }
+          if (!data.items) return [];
+    
+          const filtered = [];
+          data.items.forEach(item => {
+            const info = item.volumeInfo || {};
+            // 책 제목과 저자가 확실한 실제 도서만 정제
+            if (info.title && info.authors && info.authors.length > 0) {
+              let thumb = info.imageLinks ? (info.imageLinks.thumbnail || info.imageLinks.smallThumbnail) : "";
+              if (thumb && thumb.startsWith("http://")) thumb = thumb.replace("http://", "https://");
+    
+              filtered.push({
+                title: info.title,
+                author: info.authors.join(", "),
+                desc: info.description ? (info.description.substring(0, 110) + "...") : "책 소개 정보는 상세보기를 통해 확인하실 수 있습니다.",
+                publisher: info.publisher || "출판사 정보 없음",
+                publishedDate: info.publishedDate || "",
+                thumb: thumb,
+                link: info.infoLink || `https://search.shopping.naver.com/book/search?query=${encodeURIComponent(info.title)}`
+              });
+            }
+          });
+          return filtered;
+        } catch (err) {
+          console.error("API 통신 에러:", err);
+          return [];
         }
-      } catch (e) {
-        console.warn("API 호출 실패 또는 지연", e);
       }
     
-      // 2차: 만약 API 검색 결과가 5권 미만이면, 성향에 맞는 도서관 DB 책으로 자연스럽게 채워 무조건 5권 완성
-      if (foundBooks.length < 5) {
-        const pool = customBooks || defaultBooks;
-        const scored = pool.map(book => ({
-          ...book,
-          sim: cosineSimilarity(userVector, book.v)
-        }));
-        scored.sort((a, b) => b.sim - a.sim);
+      let results = [];
     
-        for (const b of scored) {
-          if (foundBooks.length >= 5) break;
-          if (!foundBooks.some(item => item.title === b.title)) {
-            foundBooks.push({
-              title: b.title,
-              author: b.author,
-              desc: b.desc,
-              tag: b.tag,
-              thumb: "",
-              link: `https://search.shopping.naver.com/book/search?query=${encodeURIComponent(b.title)}`
-            });
-          }
+      if (customKeyword) {
+        // 사용자가 검색창에 직접 입력한 경우
+        results = await callGoogleBooks(customKeyword);
+      } else {
+        // 1차: 정밀 키워드로 실시간 조회
+        results = await callGoogleBooks(targetQuery.primary);
+    
+        // 결과가 5권 미만이면 가짜 데이터를 넣지 않고 확장 키워드로 2차 실시간 조회
+        if (results.length < 5) {
+          const secondaryResults = await callGoogleBooks(targetQuery.secondary);
+          secondaryResults.forEach(book => {
+            if (!results.some(b => b.title === book.title)) {
+              results.push(book);
+            }
+          });
         }
       }
     
       loading.classList.add('hidden');
     
-      // 정확히 5권 렌더링
-      const topBooks = foundBooks.slice(0, 5);
-      topBooks.forEach((book, idx) => {
+      // 실시간 검색 결과가 아예 없는 경우 (네트워크 차단 등)
+      if (results.length === 0) {
+        container.innerHTML = `
+          <div class="p-8 text-center bg-[#F5F0E8] rounded-2xl border border-[#ECE5DA]">
+            <p class="text-sm font-bold text-stone-700 mb-1">실시간 도서 정보를 가져오지 못했습니다.</p>
+            <p class="text-xs text-stone-500 mb-4">Google 도서 검색 네트워크 상태를 확인하시거나 다른 검색어를 입력해 보세요.</p>
+            <button onclick="fetchBooksFromApi()" class="px-4 py-2 bg-[#8C6D53] hover:bg-[#755841] text-white rounded-xl text-xs font-semibold transition">
+              다시 시도하기 ⟳
+            </button>
+          </div>
+        `;
+        return;
+      }
+    
+      // 100% 실시간으로 불러온 상위 5권 카드 렌더링
+      const top5 = results.slice(0, 5);
+      top5.forEach((book, idx) => {
         const card = document.createElement('div');
         card.className = "p-4 sm:p-5 rounded-2xl border border-[#ECE5DA] hover:border-indigo-200 bg-[#F5F0E8]/60 hover:bg-white transition flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between";
         card.innerHTML = `
           <div class="flex items-start gap-3.5 flex-1">
             <span class="w-7 h-7 rounded-xl bg-[#8C6D53] text-white flex items-center justify-center font-bold text-xs shrink-0 mt-0.5">${idx + 1}</span>
-            ${book.thumb ? `<img src="${book.thumb}" alt="${book.title}" class="w-12 h-16 object-cover rounded-md shadow-xs shrink-0 hidden sm:block">` : ''}
+            ${book.thumb 
+              ? `<img src="${book.thumb}" alt="${book.title}" class="w-12 h-16 object-cover rounded-md shadow-xs shrink-0 hidden sm:block border border-[#ECE5DA]">` 
+              : `<div class="w-12 h-16 bg-[#E0D7C9]/40 rounded-md hidden sm:flex items-center justify-center text-xs text-stone-400 shrink-0">표지 없음</div>`
+            }
             <div>
               <div class="flex items-center gap-2 flex-wrap mb-1">
                 <h4 class="font-bold text-slate-900 text-base sm:text-lg">${book.title}</h4>
-                <span class="text-xs px-2 py-0.5 bg-emerald-50 text-emerald-700 rounded-md font-medium">${book.tag}</span>
+                <span class="text-xs px-2 py-0.5 bg-emerald-50 text-emerald-700 rounded-md font-medium border border-emerald-200/50">실시간 도서</span>
               </div>
-              <p class="text-xs text-slate-500 font-medium mb-1.5">${book.author}</p>
+              <p class="text-xs text-slate-500 font-medium mb-1.5">${book.author} | ${book.publisher} ${book.publishedDate ? `(${book.publishedDate.substring(0, 4)})` : ''}</p>
               <p class="text-xs sm:text-sm text-stone-600 leading-relaxed">${book.desc}</p>
             </div>
           </div>
