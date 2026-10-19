@@ -748,15 +748,36 @@ async function fetchBooksFromApi(isCustom = false) {
   }
 
   if (!query) {
-    const apiKeywords = {
-      "PR": "습관 공부법",
-      "PF": "성장소설 소설",
-      "CR": "과학 역사",
-      "CF": "SF 추리소설"
-    };
-    const prefix = userResultType.substring(0, 2);
-    query = apiKeywords[prefix] || "베스트셀러";
-  }
+      // 16가지 독서 MBTI 유형별 고유 검색 키워드 매핑
+      const apiKeywords = {
+        // [PR 계열: 실용 + 현실]
+        "PRDO": "시간관리 습관 공부법",
+        "PRDM": "자기관리 메모 정리법",
+        "PRSO": "핵심 요약 실전 공부법",
+        "PRSM": "트렌드 지식 교양 상식",
+  
+        // [PF 계열: 실용 + 상상/스토리]
+        "PFDO": "자아성찰 성장소설 에세이",
+        "PFDM": "감성에세이 힐링소설",
+        "PFSO": "청소년 성장소설 모험",
+        "PFSM": "관계 심리 공감 에세이",
+  
+        // [CR 계열: 지적탐구 + 현실]
+        "CRDO": "인류 역사 문명 과학",
+        "CRDM": "융합 교양 뇌과학 역사",
+        "CRSO": "알아두면 쓸모있는 과학 상식",
+        "CRSM": "잡학사전 세상의 모든 지식",
+  
+        // [CF 계열: 지적탐구 + 상상/스토리]
+        "CFDO": "하드SF 세계관 소설",
+        "CFDM": "철학 판타지 디스토피아",
+        "CFSO": "반전 추리 미스터리 스릴러",
+        "CFSM": "SF 단편집 환상문학"
+      };
+  
+      // 현재 진단된 16가지 유형 코드에 맞는 키워드 호출 (없을 경우 앞 2글자 기준)
+      query = apiKeywords[userResultType] || apiKeywords[userResultType.substring(0, 2)] || "청소년 베스트셀러";
+    }
 
   let foundBooks = [];
 
