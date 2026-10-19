@@ -221,20 +221,20 @@
           </div>
         </div>
 
-        <!-- 실시간 API 전용 검색바 -->
-        <div id="apiSearchBox" class="hidden mb-5">
-          <div class="flex gap-2">
+        <!-- 실시간 API 전용 검색바 (모바일 반응형 최적화) -->
+        <div id="apiSearchBox" class="hidden mb-5 w-full">
+          <div class="flex items-center gap-1.5 sm:gap-2 w-full">
             <input 
               type="text" 
               id="apiCustomQuery" 
-              placeholder="추가로 검색하고 싶은 키워드 (예: 추리, 우주, 심리학)" 
-              class="flex-1 px-4 py-2 border border-[#E0D7C9] rounded-xl text-sm focus:outline-none focus:border-[#8C6D53] bg-white text-stone-800"
+              placeholder="검색 키워드 (예: 추리, 우주, 심리)" 
+              class="min-w-0 flex-1 px-3 sm:px-4 py-2 border border-[#E0D7C9] rounded-xl text-xs sm:text-sm focus:outline-none focus:border-[#8C6D53] bg-white text-stone-800"
               onkeydown="if(event.key === 'Enter') { event.preventDefault(); runManualSearch(); }"
             >
             <button 
               type="button"
               onclick="runManualSearch()" 
-              class="px-5 py-2 bg-[#8C6D53] hover:bg-[#755841] active:scale-95 text-white rounded-xl text-sm font-semibold transition cursor-pointer shrink-0 shadow-sm"
+              class="px-3.5 sm:px-5 py-2 bg-[#8C6D53] hover:bg-[#755841] active:scale-95 text-white rounded-xl text-xs sm:text-sm font-semibold transition cursor-pointer shrink-0 shadow-sm whitespace-nowrap"
             >
               검색 🔍
             </button>
@@ -581,40 +581,50 @@
       }
     }
 
-    /* ============================================================
-       수정: 테스트 다시 하기 및 시작 시 모든 상태 완벽 초기화
+     /* ============================================================
+       수정: restartTest 시 탭 버튼 UI와 검색창까지 완벽 초기화
        ============================================================ */
     function restartTest() {
-      // 1. 변수 초기화
       currentQuestionIdx = 0;
       userAnswers = [];
       userVector = [0.5, 0.5, 0.5, 0.5];
       userResultType = "PRDO";
-      activeRecTab = 'curated';
     
-      // 2. 검색창 및 결과 UI 비우기
+      // 1. 검색창 비우기 및 숨기기
       const searchInput = document.getElementById('apiCustomQuery');
       if (searchInput) searchInput.value = "";
+      const apiSearchBox = document.getElementById('apiSearchBox');
+      if (apiSearchBox) apiSearchBox.classList.add('hidden');
+    
+      // 2. 도서 컨테이너 비우기
       const container = document.getElementById('bookListContainer');
       if (container) container.innerHTML = "";
     
-      // 3. 화면 전환
+      // 3. 탭 버튼 디자인을 '도서관 추천' 활성화 상태로 강제 원복
+      const tabCurated = document.getElementById('tabCurated');
+      const tabApi = document.getElementById('tabApi');
+      if (tabCurated && tabApi) {
+        tabCurated.className = "px-3 py-1.5 rounded-lg bg-white shadow-sm text-indigo-700 transition";
+        tabApi.className = "px-3 py-1.5 rounded-lg text-stone-600 hover:text-slate-900 transition";
+      }
+    
+      // 4. 화면 전환
       document.getElementById('resultView').classList.add('hidden');
       document.getElementById('quizView').classList.add('hidden');
       document.getElementById('introView').classList.remove('hidden');
       window.scrollTo({ top: 0, behavior: 'smooth' });
     }
-
-/* ============================================================
-   수정: 4대 축 점수 집계 및 벡터 계산 (방어 코드 적용)
-   ============================================================ */
+    
+    /* ============================================================
+       수정: calculateAndShowResult 결과 진입 시 switchRecTab('curated') 명시 호출
+       ============================================================ */
     function calculateAndShowResult() {
       let pScore = 0, cScore = 0;
       let rScore = 0, fScore = 0;
       let dScore = 0, sScore = 0;
       let oScore = 0, mScore = 0;
     
-      userAnswers.forEach((ans, index) => {
+      userAnswers.forEach((ans) => {
         if (!ans || !ans.val) return;
         const w = ans.weight || 1.0;
     
@@ -628,7 +638,6 @@
         else if (ans.val === 'M') mScore += w;
       });
     
-      // 합계가 0일 경우(미응답 방어) 기본 0.5 부여, 정상 응답 시 정확한 비율 계산
       const pRatio = (pScore + cScore) > 0 ? (pScore / (pScore + cScore)) : 0.5;
       const rRatio = (rScore + fScore) > 0 ? (rScore / (rScore + fScore)) : 0.5;
       const dRatio = (dScore + sScore) > 0 ? (dScore / (dScore + sScore)) : 0.5;
@@ -636,21 +645,19 @@
     
       userVector = [pRatio, rRatio, dRatio, oRatio];
     
-      // 16가지 코드 판별
       const letter1 = pRatio >= 0.5 ? 'P' : 'C';
       const letter2 = rRatio >= 0.5 ? 'R' : 'F';
       const letter3 = dRatio >= 0.5 ? 'D' : 'S';
       const letter4 = oRatio >= 0.5 ? 'O' : 'M';
       userResultType = `${letter1}${letter2}${letter3}${letter4}`;
     
-      // UI 렌더링
       renderResultUI(pRatio, rRatio, dRatio, oRatio);
       document.getElementById('quizView').classList.add('hidden');
       document.getElementById('resultView').classList.remove('hidden');
       window.scrollTo({ top: 0, behavior: 'smooth' });
     
-      // 추천 도서 다시 계산 및 출력
-      renderCuratedBooks();
+      // 탭 버튼 UI와 출력 데이터를 'curated'로 일치시켜 실행
+      switchRecTab('curated');
     }
 
     function renderResultUI(p, r, d, o) {
