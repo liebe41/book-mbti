@@ -210,31 +210,31 @@
             <p id="recSubtitle" class="text-xs sm:text-sm text-slate-500 mt-1">4차원 코사인 유사도 벡터 알고리즘으로 분석한 결과입니다.</p>
           </div>
 
-          <!-- 추천 소스 탭 전환 -->
-          <div class="inline-flex p-1 bg-slate-100 rounded-xl text-xs font-semibold">
-            <button id="tabCurated" onclick="switchRecTab('curated')" class="px-3 py-1.5 rounded-lg bg-white shadow-sm text-indigo-700 transition">
+      <!-- 추천 소스 탭 전환 (활성/비활성 대비 극대화) -->
+          <div class="inline-flex p-1 bg-[#ECE5DA] rounded-xl text-xs font-semibold">
+            <button id="tabCurated" onclick="switchRecTab('curated')" class="px-3 py-1.5 rounded-lg bg-[#8C6D53] text-white shadow-xs font-bold transition">
               🏛️ 도서관 추천 (80선)
             </button>
-            <button id="tabApi" onclick="switchRecTab('api')" class="px-3 py-1.5 rounded-lg text-stone-600 hover:text-slate-900 transition">
+            <button id="tabApi" onclick="switchRecTab('api')" class="px-3 py-1.5 rounded-lg bg-transparent text-stone-600 hover:text-stone-900 font-medium transition">
               🌐 실시간 서점 API
             </button>
           </div>
         </div>
 
-  <!-- 실시간 API 전용 검색바 (모바일 반응형 완벽 보정) -->
+        <!-- 실시간 API 전용 검색바 (모바일 폭 넘침 원천 차단: w-0 flex-1 min-w-0) -->
         <div id="apiSearchBox" class="hidden mb-5 w-full">
-          <div class="flex items-center gap-2 w-full max-w-full">
+          <div class="flex items-center gap-1.5 sm:gap-2 w-full">
             <input 
               type="text" 
               id="apiCustomQuery" 
               placeholder="도서 키워드 검색 (예: 추리, 우주)" 
-              class="min-w-0 flex-1 w-full px-3 py-2 border border-[#E0D7C9] rounded-xl text-xs sm:text-sm focus:outline-none focus:border-[#8C6D53] bg-white text-stone-800"
+              class="w-0 flex-1 min-w-0 px-3 py-2 border border-[#E0D7C9] rounded-xl text-xs sm:text-sm focus:outline-none focus:border-[#8C6D53] bg-white text-stone-800"
               onkeydown="if(event.key === 'Enter') { event.preventDefault(); runManualSearch(); }"
             >
             <button 
               type="button"
               onclick="runManualSearch()" 
-              class="px-3 sm:px-4 py-2 bg-[#8C6D53] hover:bg-[#755841] active:scale-95 text-white rounded-xl text-xs sm:text-sm font-semibold transition shrink-0 shadow-xs whitespace-nowrap"
+              class="px-3 sm:px-4 py-2 bg-[#8C6D53] hover:bg-[#755841] active:scale-95 text-white rounded-xl text-xs sm:text-sm font-semibold transition shrink-0 shadow-xs whitespace-nowrap cursor-pointer"
             >
               검색 🔍
             </button>
@@ -601,13 +601,11 @@
       const container = document.getElementById('bookListContainer');
       if (container) container.innerHTML = "";
 
-      // 3. 탭 버튼 스타일을 '도서관 추천' 활성화 상태로 강제 원복
+      // 3. 탭 버튼을 '도서관 추천' 활성화 상태로 강제 복원
       const tabCurated = document.getElementById('tabCurated');
       const tabApi = document.getElementById('tabApi');
-      if (tabCurated && tabApi) {
-        tabCurated.className = "px-3 py-1.5 rounded-lg bg-white shadow-sm text-[#8C6D53] font-bold transition";
-        tabApi.className = "px-3 py-1.5 rounded-lg text-stone-500 hover:text-stone-800 font-medium transition";
-      }
+      if (tabCurated) tabCurated.className = "px-3 py-1.5 rounded-lg bg-[#8C6D53] text-white shadow-xs font-bold transition";
+      if (tabApi) tabApi.className = "px-3 py-1.5 rounded-lg bg-transparent text-stone-600 hover:text-stone-900 font-medium transition";
 
       // 4. 화면 전환
       document.getElementById('resultView').classList.add('hidden');
@@ -617,7 +615,7 @@
     }
     
     /* ============================================================
-       수정: calculateAndShowResult 결과 진입 시 switchRecTab('curated') 명시 호출
+       수정: calculateAndShowResult 결과 진입 시 ('curated') 명시 호출
        ============================================================ */
     function calculateAndShowResult() {
       let pScore = 0, cScore = 0;
@@ -713,8 +711,8 @@
       return similarity;
     }
 
-   /* ============================================================
-       6. 도서 추천 렌더링 (도서관 DB vs 서점 API) - 탭 디자인 명확화
+ /* ============================================================
+       수정: 탭 스타일 전환 (선택 탭: 브라운 배경+흰색 글씨, 미선택: 투명+스톤)
        ============================================================ */
     function switchRecTab(tab) {
       activeRecTab = tab;
@@ -724,17 +722,17 @@
       const recSubtitle = document.getElementById('recSubtitle');
 
       if (tab === 'curated') {
-        // [도서관 추천] 활성화 상태
-        tabCurated.className = "px-3 py-1.5 rounded-lg bg-white shadow-sm text-[#8C6D53] font-bold transition";
-        tabApi.className = "px-3 py-1.5 rounded-lg text-stone-500 hover:text-stone-800 font-medium transition";
+        // [도서관 추천] 활성화
+        if (tabCurated) tabCurated.className = "px-3 py-1.5 rounded-lg bg-[#8C6D53] text-white shadow-xs font-bold transition";
+        if (tabApi) tabApi.className = "px-3 py-1.5 rounded-lg bg-transparent text-stone-600 hover:text-stone-900 font-medium transition";
         
         if (apiSearchBox) apiSearchBox.classList.add('hidden');
         if (recSubtitle) recSubtitle.innerText = "사용자의 4축 세부 성향 벡터와 도서의 특성 벡터 간 정밀 일치율 상위 5권입니다.";
         renderCuratedBooks();
       } else {
-        // [실시간 서점 API] 활성화 상태
-        tabApi.className = "px-3 py-1.5 rounded-lg bg-white shadow-sm text-[#8C6D53] font-bold transition";
-        tabCurated.className = "px-3 py-1.5 rounded-lg text-stone-500 hover:text-stone-800 font-medium transition";
+        // [실시간 서점 API] 활성화
+        if (tabApi) tabApi.className = "px-3 py-1.5 rounded-lg bg-[#8C6D53] text-white shadow-xs font-bold transition";
+        if (tabCurated) tabCurated.className = "px-3 py-1.5 rounded-lg bg-transparent text-stone-600 hover:text-stone-900 font-medium transition";
         
         if (apiSearchBox) apiSearchBox.classList.remove('hidden');
         if (recSubtitle) recSubtitle.innerText = "Google Books 실시간 서점 검색 API를 통해 최신 출간 도서를 매칭합니다.";
