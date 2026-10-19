@@ -580,8 +580,9 @@
       let rScore = 0, fScore = 0;
       let dScore = 0, sScore = 0;
       let oScore = 0, mScore = 0;
-
+    
       userAnswers.forEach(ans => {
+        if (!ans) return;
         if (ans.val === 'P') pScore += ans.weight;
         else if (ans.val === 'C') cScore += ans.weight;
         else if (ans.val === 'R') rScore += ans.weight;
@@ -591,13 +592,13 @@
         else if (ans.val === 'O') oScore += ans.weight;
         else if (ans.val === 'M') mScore += ans.weight;
       });
-
-      // 비율(0.0 ~ 1.0) 계산
-      const pRatio = pScore / (pScore + cScore);
-      const rRatio = rScore / (rScore + fScore);
-      const dRatio = dScore / (dScore + sScore);
-      const oRatio = oScore / (oScore + mScore);
-
+    
+      // 0 분모 방지 (기본 0.5)
+      const pRatio = (pScore + cScore) > 0 ? (pScore / (pScore + cScore)) : 0.5;
+      const rRatio = (rScore + fScore) > 0 ? (rScore / (rScore + fScore)) : 0.5;
+      const dRatio = (dScore + sScore) > 0 ? (dScore / (dScore + sScore)) : 0.5;
+      const oRatio = (oScore + mScore) > 0 ? (oScore / (oScore + mScore)) : 0.5;
+      
       userVector = [pRatio, rRatio, dRatio, oRatio];
 
       // 유형 코드 결정
