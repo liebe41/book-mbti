@@ -660,16 +660,21 @@
       document.getElementById('barM').style.width = `${100 - oPct}%`;
     }
 
-    // 코사인 유사도 공식
+    /* ============================================================
+       수정 1: 성향 차이를 정확히 반영하는 거리 기반 정밀 일치율 공식
+       (CFSM에 실용서가 추천되는 코사인 각도 왜곡 현상 완전 해결)
+       ============================================================ */
     function cosineSimilarity(vecA, vecB) {
-      let dot = 0, magA = 0, magB = 0;
+      // 두 벡터 사이의 오차 거리(차이)를 계산
+      let sumDiffSq = 0;
       for (let i = 0; i < 4; i++) {
-        dot += vecA[i] * vecB[i];
-        magA += vecA[i] * vecA[i];
-        magB += vecB[i] * vecB[i];
+        const diff = vecA[i] - vecB[i];
+        sumDiffSq += diff * diff;
       }
-      if (magA === 0 || magB === 0) return 0;
-      return dot / (Math.sqrt(magA) * Math.sqrt(magB));
+      // 4차원 최대 거리 2 기준, 1.0(완벽 일치) ~ 0.0(완전 반대) 정규화
+      const distance = Math.sqrt(sumDiffSq);
+      const similarity = Math.max(0, 1 - (distance / 2));
+      return similarity;
     }
 
     /* ============================================================
@@ -740,7 +745,7 @@
     }
 
     /* ============================================================
-       7. 실시간 서점 검색 엔진 (키워드 분해 및 성향별 동적 폴백 적용)
+       수정 2: 무조건 5권 보장 + 성향별 검색어 최적화 서점 API 엔진
        ============================================================ */
     async function fetchBooksFromApi(isCustom = false) {
       const container = document.getElementById('bookListContainer');
@@ -753,93 +758,93 @@
         query = document.getElementById('apiCustomQuery').value.trim();
       }
     
-      // 16가지 독서 MBTI 전용 키워드 매핑 테이블
+      // 16가지 독서 MBTI 전용 키워드 (도서 검색에 가장 잘 걸리는 알짜 단어)
       const apiKeywords = {
-        "PRDO": "습관 공부법",
+        "PRDO": "공부법 습관",
         "PRDM": "자기관리 메모",
-        "PRSO": "요약 공부법",
+        "PRSO": "핵심 공부법",
         "PRSM": "상식 교양",
-        "PFDO": "성장소설 자아성찰",
-        "PFDM": "힐링소설 에세이",
-        "PFSO": "청소년소설 모험",
+        "PFDO": "성장소설",
+        "PFDM": "힐링 에세이",
+        "PFSO": "청소년 소설",
         "PFSM": "관계 심리",
-        "CRDO": "역사 문명 과학",
-        "CRDM": "뇌과학 인문학",
+        "CRDO": "사피엔스 역사",
+        "CRDM": "뇌과학 교양",
         "CRSO": "과학 상식",
-        "CRSM": "잡학사전 과학",
-        "CFDO": "SF소설 세계관",
-        "CFDM": "판타지 디스토피아",
-        "CFSO": "추리 미스터리",
-        "CFSM": "SF단편 환상문학"
+        "CRSM": "잡학사전",
+        "CFDO": "SF 소설",
+        "CFDM": "디스토피아 소설",
+        "CFSO": "추리 소설",
+        "CFSM": "SF 단편소설"
       };
     
       if (!query) {
-        query = apiKeywords[userResultType] || "베스트셀러";
+        query = apiKeywords[userResultType] || "소설 베스트셀러";
       }
     
       let foundBooks = [];
     
-      // 1차 시도: Google Books API (단일 핵심 키워드로 검색해 적중률 향상)
+      // 1차: Google Books API를 넉넉하게 20권 가져와 유효한 책만 선별
       try {
-        const primaryTerm = query.split(" ")[0]; // 가장 핵심인 첫 단어 추출
-        const cleanQuery = encodeURIComponent(primaryTerm);
-        const url = `https://www.googleapis.com/books/v1/volumes?q=${cleanQuery}&maxResults=8`;
+        const cleanQuery = encodeURIComponent(query);
+        const url = `https://www.googleapis.com/books/v1/volumes?q=${cleanQuery}&maxResults=20&orderBy=relevance`;
         const res = await fetch(url);
         if (res.ok) {
           const data = await res.json();
           if (data.items && data.items.length > 0) {
-            foundBooks = data.items.map(item => {
+            data.items.forEach(item => {
               const info = item.volumeInfo || {};
-              let thumb = info.imageLinks ? (info.imageLinks.thumbnail || info.imageLinks.smallThumbnail) : "";
-              if (thumb && thumb.startsWith("http://")) thumb = thumb.replace("http://", "https://");
-              return {
-                title: info.title || "제목 미상",
-                author: info.authors ? info.authors.join(", ") : "저자 미상",
-                desc: info.description ? (info.description.substring(0, 110) + "...") : "실시간 도서 정보가 제공됩니다.",
-                tag: "실시간 검색",
-                thumb: thumb,
-                link: info.infoLink || `https://search.shopping.naver.com/book/search?query=${encodeURIComponent(info.title || query)}`
-              };
+              // 제목과 저자가 제대로 있는 정식 도서만 수집
+              if (info.title && info.authors && info.description) {
+                let thumb = info.imageLinks ? (info.imageLinks.thumbnail || info.imageLinks.smallThumbnail) : "";
+                if (thumb && thumb.startsWith("http://")) thumb = thumb.replace("http://", "https://");
+                
+                // 중복 도서 제외하고 추가
+                if (!foundBooks.some(b => b.title === info.title)) {
+                  foundBooks.push({
+                    title: info.title,
+                    author: info.authors.join(", "),
+                    desc: info.description.substring(0, 110) + "...",
+                    tag: "실시간 검색",
+                    thumb: thumb,
+                    link: info.infoLink || `https://search.shopping.naver.com/book/search?query=${encodeURIComponent(info.title)}`
+                  });
+                }
+              }
             });
           }
         }
       } catch (e) {
-        console.warn("Google Books API 호출 실패, 지능형 폴백을 실행합니다.", e);
+        console.warn("API 호출 실패 또는 지연", e);
       }
     
-      // 2차 안전망: API 실패 시 단어별 분해 검색 및 코사인 유사도 기반 동적 매칭
-      if (foundBooks.length === 0) {
+      // 2차: 만약 API 검색 결과가 5권 미만이면, 성향에 맞는 도서관 DB 책으로 자연스럽게 채워 무조건 5권 완성
+      if (foundBooks.length < 5) {
         const pool = customBooks || defaultBooks;
-        const tokens = query.split(" ").filter(t => t.length > 0);
-    
-        // 검색어에 포함된 단어가 들어있는 책 필터링
-        let matched = pool.filter(b => 
-          tokens.some(t => b.title.includes(t) || b.desc.includes(t) || b.tag.includes(t))
-        );
-    
-        // 단어 일치 도서가 없으면, 현재 사용자의 MBTI 벡터와 가장 잘 맞는 도서 상위 5권 산출
-        if (matched.length === 0) {
-          const scored = pool.map(book => ({
-            ...book,
-            sim: cosineSimilarity(userVector, book.v)
-          }));
-          scored.sort((a, b) => b.sim - a.sim);
-          matched = scored.slice(0, 5);
-        }
-    
-        foundBooks = matched.slice(0, 5).map(b => ({
-          title: b.title,
-          author: b.author,
-          desc: b.desc,
-          tag: b.tag,
-          thumb: "",
-          link: `https://search.shopping.naver.com/book/search?query=${encodeURIComponent(b.title)}`
+        const scored = pool.map(book => ({
+          ...book,
+          sim: cosineSimilarity(userVector, book.v)
         }));
+        scored.sort((a, b) => b.sim - a.sim);
+    
+        for (const b of scored) {
+          if (foundBooks.length >= 5) break;
+          if (!foundBooks.some(item => item.title === b.title)) {
+            foundBooks.push({
+              title: b.title,
+              author: b.author,
+              desc: b.desc,
+              tag: b.tag,
+              thumb: "",
+              link: `https://search.shopping.naver.com/book/search?query=${encodeURIComponent(b.title)}`
+            });
+          }
+        }
       }
     
       loading.classList.add('hidden');
     
-      // 화면 렌더링
+      // 정확히 5권 렌더링
       const topBooks = foundBooks.slice(0, 5);
       topBooks.forEach((book, idx) => {
         const card = document.createElement('div');
