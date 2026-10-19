@@ -544,11 +544,17 @@
       document.getElementById('prevBtn').style.visibility = (currentQuestionIdx === 0) ? 'hidden' : 'visible';
     }
 
+    /* 1. 옵션 선택 함수 */
     function selectOption(choice) {
       const q = questions[currentQuestionIdx];
-      const selectedVal = (choice === 'A') ? q.optA.val : q.optB.val;
-      userAnswers[currentQuestionIdx] = { val: selectedVal, weight: q.weight, axis: q.axis };
-
+      const selectedObj = (choice === 'A') ? q.optA : q.optB;
+      
+      userAnswers[currentQuestionIdx] = {
+        val: selectedObj.val,
+        weight: q.weight || 1.0,
+        axis: q.axis
+      };
+    
       if (currentQuestionIdx < questions.length - 1) {
         currentQuestionIdx++;
         renderQuestion();
@@ -571,51 +577,52 @@
       window.scrollTo({ top: 0, behavior: 'smooth' });
     }
 
-    /* ============================================================
-       5. 코사인 유사도 벡터 계산 엔진
-       ============================================================ */
+/* ============================================================
+   수정: 4대 축 점수 집계 및 벡터 계산 (방어 코드 적용)
+   ============================================================ */
     function calculateAndShowResult() {
-      // 4대 축 가중 점수 합산
       let pScore = 0, cScore = 0;
       let rScore = 0, fScore = 0;
       let dScore = 0, sScore = 0;
       let oScore = 0, mScore = 0;
     
-      userAnswers.forEach(ans => {
-        if (!ans) return;
-        if (ans.val === 'P') pScore += ans.weight;
-        else if (ans.val === 'C') cScore += ans.weight;
-        else if (ans.val === 'R') rScore += ans.weight;
-        else if (ans.val === 'F') fScore += ans.weight;
-        else if (ans.val === 'D') dScore += ans.weight;
-        else if (ans.val === 'S') sScore += ans.weight;
-        else if (ans.val === 'O') oScore += ans.weight;
-        else if (ans.val === 'M') mScore += ans.weight;
+      userAnswers.forEach((ans, index) => {
+        if (!ans || !ans.val) return;
+        const w = ans.weight || 1.0;
+    
+        if (ans.val === 'P') pScore += w;
+        else if (ans.val === 'C') cScore += w;
+        else if (ans.val === 'R') rScore += w;
+        else if (ans.val === 'F') fScore += w;
+        else if (ans.val === 'D') dScore += w;
+        else if (ans.val === 'S') sScore += w;
+        else if (ans.val === 'O') oScore += w;
+        else if (ans.val === 'M') mScore += w;
       });
     
-      // 0 분모 방지 (기본 0.5)
+      // 합계가 0일 경우(미응답 방어) 기본 0.5 부여, 정상 응답 시 정확한 비율 계산
       const pRatio = (pScore + cScore) > 0 ? (pScore / (pScore + cScore)) : 0.5;
       const rRatio = (rScore + fScore) > 0 ? (rScore / (rScore + fScore)) : 0.5;
       const dRatio = (dScore + sScore) > 0 ? (dScore / (dScore + sScore)) : 0.5;
       const oRatio = (oScore + mScore) > 0 ? (oScore / (oScore + mScore)) : 0.5;
-      
+    
       userVector = [pRatio, rRatio, dRatio, oRatio];
-
-      // 유형 코드 결정
+    
+      // 16가지 코드 판별
       const letter1 = pRatio >= 0.5 ? 'P' : 'C';
       const letter2 = rRatio >= 0.5 ? 'R' : 'F';
       const letter3 = dRatio >= 0.5 ? 'D' : 'S';
       const letter4 = oRatio >= 0.5 ? 'O' : 'M';
       userResultType = `${letter1}${letter2}${letter3}${letter4}`;
-
-      // 결과 화면 렌더링
+    
+      // UI 렌더링
       renderResultUI(pRatio, rRatio, dRatio, oRatio);
       document.getElementById('quizView').classList.add('hidden');
       document.getElementById('resultView').classList.remove('hidden');
       window.scrollTo({ top: 0, behavior: 'smooth' });
-
-      // 기본 추천 도서 렌더링
-      switchRecTab('curated');
+    
+      // 추천 도서 다시 계산 및 출력
+      renderCuratedBooks();
     }
 
     function renderResultUI(p, r, d, o) {
@@ -749,40 +756,31 @@ async function fetchBooksFromApi(isCustom = false) {
   }
 
   if (!query) {
-      // 16가지 독서 MBTI 유형별 고유 검색 키워드 매핑
-      const apiKeywords = {
-        // [PR 계열: 실용 + 현실]
-        "PRDO": "시간관리 습관 공부법",
-        "PRDM": "자기관리 메모 정리법",
-        "PRSO": "핵심 요약 실전 공부법",
-        "PRSM": "트렌드 지식 교양 상식",
-  
-        // [PF 계열: 실용 + 상상/스토리]
-        "PFDO": "자아성찰 성장소설 에세이",
-        "PFDM": "감성에세이 힐링소설",
-        "PFSO": "청소년 성장소설 모험",
-        "PFSM": "관계 심리 공감 에세이",
-  
-        // [CR 계열: 지적탐구 + 현실]
-        "CRDO": "인류 역사 문명 과학",
-        "CRDM": "융합 교양 뇌과학 역사",
-        "CRSO": "알아두면 쓸모있는 과학 상식",
-        "CRSM": "잡학사전 세상의 모든 지식",
-  
-        // [CF 계열: 지적탐구 + 상상/스토리]
-        "CFDO": "하드SF 세계관 소설",
-        "CFDM": "철학 판타지 디스토피아",
-        "CFSO": "반전 추리 미스터리 스릴러",
-        "CFSM": "SF 단편집 환상문학"
-      };
-  
-      // 현재 진단된 16가지 유형 코드에 맞는 키워드 호출 (없을 경우 앞 2글자 기준)
-      query = apiKeywords[userResultType] || apiKeywords[userResultType.substring(0, 2)] || "청소년 베스트셀러";
-    }
+    // 16가지 독서 MBTI 전용 키워드 매핑 테이블
+    const apiKeywords = {
+      "PRDO": "시간관리 습관 공부법",
+      "PRDM": "자기관리 메모 정리법",
+      "PRSO": "핵심 요약 실전 공부법",
+      "PRSM": "트렌드 지식 교양 상식",
+      "PFDO": "자아성찰 성장소설 에세이",
+      "PFDM": "감성에세이 힐링소설",
+      "PFSO": "청소년 성장소설 모험",
+      "PFSM": "관계 심리 공감 에세이",
+      "CRDO": "인류 역사 문명 과학",
+      "CRDM": "융합 교양 뇌과학 역사",
+      "CRSO": "알아두면 쓸모있는 과학 상식",
+      "CRSM": "잡학사전 세상의 모든 지식",
+      "CFDO": "하드SF 세계관 소설",
+      "CFDM": "철학 판타지 디스토피아",
+      "CFSO": "반전 추리 미스터리 스릴러",
+      "CFSM": "SF 단편집 환상문학"
+    };
+
+    query = apiKeywords[userResultType] || "청소년 베스트셀러";
+  }
 
   let foundBooks = [];
 
-  // 1차 시도: Google Books API (제약 파라미터 제거)
   try {
     const cleanQuery = encodeURIComponent(query);
     const url = `https://www.googleapis.com/books/v1/volumes?q=${cleanQuery}&maxResults=8`;
@@ -806,11 +804,10 @@ async function fetchBooksFromApi(isCustom = false) {
       }
     }
   } catch (e) {
-    console.warn("Google Books API 호출 실패, 안전망으로 전환합니다.", e);
+    console.warn("Google Books API 호출 실패, 도서관 DB로 대체합니다.", e);
   }
 
-  // 2차 안전망: 만약 외부 API에서 결과가 0건이거나 에러라면?
-  // 내장 도서관 DB 및 검색어 매칭 엔진에서 즉시 책을 찾아 화면에 보여줍니다.
+  // API 검색 실패 또는 0건일 때 자동 폴백
   if (foundBooks.length === 0) {
     const pool = customBooks || defaultBooks;
     const matched = pool.filter(b => 
@@ -833,7 +830,6 @@ async function fetchBooksFromApi(isCustom = false) {
 
   loading.classList.add('hidden');
 
-  // 화면에 렌더링
   const topBooks = foundBooks.slice(0, 5);
   topBooks.forEach((book, idx) => {
     const card = document.createElement('div');
